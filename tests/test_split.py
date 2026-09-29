@@ -70,7 +70,7 @@ class SplitTest(unittest.TestCase):
             r1 = split(export, data)
             self.assertEqual(r1.shells, 1)
             self.assertEqual([s for s, _, _ in r1.rows], ["new"])
-            files = list((data / "windows").glob("*.json"))
+            files = list((data / "workbench").glob("*.json"))
             self.assertEqual(len(files), 1)
             self.assertTrue(files[0].name.startswith("2026-09-01_15_c-15aaaa"))
 
@@ -83,7 +83,7 @@ class SplitTest(unittest.TestCase):
             export.write_text(json.dumps([conv("c-15aaaaaa", "15 新名字", more)]))
             r3 = split(export, data)
             self.assertEqual([s for s, _, _ in r3.rows], ["updated"])
-            files = list((data / "windows").glob("*.json"))
+            files = list((data / "workbench").glob("*.json"))
             self.assertEqual(len(files), 1)
             self.assertEqual(json.loads(files[0].read_text())["message_count"], 5)
             self.assertEqual(len(list((data / "raw").glob("*.json"))), 2)
