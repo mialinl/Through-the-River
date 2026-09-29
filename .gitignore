@@ -1,0 +1,11 @@
+# 原文和索引只在本机，绝不进仓库
+data/
+*.db
+*.db-*
+conversations*.json
+*.zip
+.env
+
+__pycache__/
+*.pyc
+.venv/
