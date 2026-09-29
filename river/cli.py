@@ -15,6 +15,12 @@ def _default_data_dir() -> Path:
 def cmd_split(args: argparse.Namespace) -> None:
     export = Path(args.export).expanduser()
     if not export.exists():
+        # 在 ~/ 后面又拖进了完整路径，会变成 /Users/名字/Users/名字/...
+        home = str(Path.home())
+        doubled = str(export)
+        if doubled.startswith(home + home):
+            export = Path(doubled[len(home):])
+    if not export.exists():
         sys.exit(f"找不到文件：{export}")
     data_dir = Path(args.data).expanduser() if args.data else _default_data_dir()
     r = split(export, data_dir, account_label=args.label, tz=args.tz)
