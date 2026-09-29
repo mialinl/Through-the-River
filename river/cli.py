@@ -128,6 +128,15 @@ def cmd_read(args: argparse.Namespace) -> None:
         print(f"\n#{r['i']} {_fmt_time(r['created_at'])} {WHO.get(r['sender'], r['sender'])}{mark}\n{r['text']}")
 
 
+def cmd_serve(args: argparse.Namespace) -> None:
+    try:
+        from .mcp_server import serve
+    except ImportError:
+        sys.exit("MCP 服务要先装依赖：python3 -m pip install -r requirements.txt（需要 Python 3.10 以上）")
+    os.environ["RIVER_DATA"] = str(_paths(args).root)
+    serve(stdio=args.stdio, host=args.host, port=args.port)
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="river", description="Through the River 全量记忆库")
     p.add_argument("--data", help="数据目录（默认是仓库里的 data/，也可以用环境变量 RIVER_DATA）")
@@ -173,6 +182,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--around", type=int, default=5, help="前后各读几条（默认 5）")
     s.add_argument("--tail", type=int, help="读最后几条")
     s.set_defaults(func=cmd_read)
+
+    s = sub.add_parser("serve", help="启动 MCP 服务")
+    s.add_argument("--stdio", action="store_true", help="用 stdio（本机 Claude Code / Desktop）")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=18002)
+    s.set_defaults(func=cmd_serve)
 
     args = p.parse_args(argv)
     args.func(args)

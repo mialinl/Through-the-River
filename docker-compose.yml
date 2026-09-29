@@ -1,0 +1,25 @@
+# River + 它自己的 Cloudflare 隧道（跟 Ombre 分开）
+#   cp .env.example .env    然后填好 .env
+#   docker compose up -d --build
+services:
+  river:
+    build: .
+    container_name: river
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - RIVER_DATA=/data
+    volumes:
+      # 跟 Mac 上跑 split 用的是同一个 data 文件夹，导入完容器马上能搜到
+      - ./data:/data
+    ports:
+      # 只绑本机，方便自己测；公网只走隧道
+      - "127.0.0.1:18002:8000"
+
+  river-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: river-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    depends_on:
+      - river

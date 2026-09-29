@@ -26,7 +26,7 @@ CREATE TABLE windows (
 );
 CREATE TABLE messages (
     id INTEGER PRIMARY KEY, uuid TEXT, window_uuid TEXT, i INTEGER,
-    sender TEXT, created_at TEXT, text TEXT
+    sender TEXT, created_at TEXT, text TEXT, tools TEXT, flags TEXT
 );
 CREATE INDEX messages_window ON messages(window_uuid, i);
 CREATE INDEX messages_time ON messages(created_at);
@@ -58,9 +58,12 @@ def build(paths: store.Paths) -> tuple[int, int, bool]:
         )
         n_win += 1
         for m in w["messages"]:
+            tools = [b.get("name") or "?" for b in m.get("blocks", []) if b.get("type") == "tool_use"]
             con.execute(
-                "INSERT INTO messages (uuid, window_uuid, i, sender, created_at, text) VALUES (?,?,?,?,?,?)",
-                (m["uuid"], w["uuid"], m["i"], m.get("sender"), m.get("created_at"), m.get("text") or ""),
+                "INSERT INTO messages (uuid, window_uuid, i, sender, created_at, text, tools, flags)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                (m["uuid"], w["uuid"], m["i"], m.get("sender"), m.get("created_at"), m.get("text") or "",
+                 ",".join(tools), ",".join(m.get("flags", []))),
             )
             n_msg += 1
     if has_fts:
@@ -76,6 +79,10 @@ def connect(paths: store.Paths) -> sqlite3.Connection:
         raise SystemExit("还没有索引。先跑一次 python3 -m river publish。")
     con = sqlite3.connect(paths.db)
     con.row_factory = sqlite3.Row
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(messages)")}
+    if "tools" not in cols:
+        con.close()
+        raise SystemExit("索引是旧版本的。跑一次 python3 -m river publish 重建一下。")
     return con
 
 
@@ -114,6 +121,8 @@ class Hit:
     sender: str
     created_at: str
     text: str
+    tools: str = ""
+    flags: str = ""
 
     def snippet(self, terms: list[str], width: int = 50) -> str:
         low = self.text.lower()
@@ -177,8 +186,8 @@ def search(paths: store.Paths, query: str, window: Optional[str] = None,
         args + [limit],
     ).fetchall()
     con.close()
-    hits = [Hit(r["wnum"], r["wname"], r["window_uuid"], r["i"], r["sender"], r["created_at"], r["text"])
-            for r in rows]
+    hits = [Hit(r["wnum"], r["wname"], r["window_uuid"], r["i"], r["sender"], r["created_at"], r["text"],
+                r["tools"] or "", r["flags"] or "") for r in rows]
     return hits, total
 
 
@@ -200,3 +209,40 @@ def read(paths: store.Paths, window: str, at: Optional[int] = None, around: int 
         ).fetchall()
     con.close()
     return w, rows
+
+
+def windows(paths: store.Paths) -> list[sqlite3.Row]:
+    con = connect(paths)
+    rows = con.execute("SELECT * FROM windows").fetchall()
+    con.close()
+
+    def key(r):
+        try:
+            return (float(r["window"]), r["created_at"] or "")
+        except (TypeError, ValueError):
+            return (float("inf"), r["created_at"] or "")
+    return sorted(rows, key=key)
+
+
+def tail_chars(paths: store.Paths, window: Optional[str] = None,
+               chars: int = 3000) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
+    """一窗的结尾，往前取到够 chars 个字为止（按字数截，不按轮数）。
+
+    不指定窗口就取最后说过话的那一窗——开新窗时就是上一窗。
+    """
+    con = connect(paths)
+    if window:
+        w = find_window(con, window)
+    else:
+        w = con.execute("SELECT * FROM windows ORDER BY last_message_at DESC LIMIT 1").fetchone()
+        if w is None:
+            raise SystemExit("索引里还没有窗口。")
+    picked, total = [], 0
+    for r in con.execute("SELECT * FROM messages WHERE window_uuid=? ORDER BY i DESC", (w["uuid"],)):
+        picked.append(r)
+        total += len(r["text"] or "")
+        if total >= chars:
+            break
+    con.close()
+    picked.reverse()
+    return w, picked

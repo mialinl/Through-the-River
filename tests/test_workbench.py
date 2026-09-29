@@ -72,6 +72,9 @@ class WorkbenchTest(unittest.TestCase):
             self.assertEqual(total, 0)
             w, rows = index.read(paths, "15", tail=True, around=2)
             self.assertEqual([r["i"] for r in rows], [2, 3])
+            w, rows = index.tail_chars(paths, chars=3)          # 不指定窗口 = 最后说过话的那窗
+            self.assertEqual((w["window"], [r["i"] for r in rows]), ("15", [2, 3]))
+            self.assertEqual([r["tools"] for r in index.read(paths, "15", at=1, around=0)[1]], ["breath"])
 
 
 if __name__ == "__main__":

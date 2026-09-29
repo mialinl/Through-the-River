@@ -69,6 +69,42 @@ python3 -m river read 15 --at 120              # 读第 15 窗第 120 条前后
 python3 -m river read 15 --tail 10             # 读第 15 窗最后 10 条
 ```
 
+## 接到 claude.ai（MCP）
+
+River 跑在 Mac 的 Docker 里，用自己的 Cloudflare 隧道连到公网，claude.ai 连接器通过 OAuth 密码页授权。
+工具有四个：`river_windows`（列窗口）、`river_search`（搜原文）、`river_read`（读一段原文）、`river_tail`（读一窗结尾，开新窗接前情用）。
+
+**1. 在 Cloudflare 建隧道**
+
+Cloudflare 后台 → Zero Trust → Networks → Tunnels → Create a tunnel → 选 Cloudflared → 名字填 `river`。
+安装那一步会给一条带 `--token` 的命令，只复制 `--token` 后面那一长串。
+下一步 Public Hostname：子域名填 `river`，域名选你的，Service 选 `HTTP`，URL 填 `river:8000`。
+
+**2. 填配置**
+
+```bash
+cd ~/Through-the-River
+cp .env.example .env
+open -e .env
+```
+
+填 `RIVER_PUBLIC_URL`（比如 `https://river.你的域名`）、`RIVER_PASSWORD`（自己取一个长密码）、`TUNNEL_TOKEN`（刚才那一长串），保存。
+
+**3. 启动**
+
+```bash
+docker compose up -d --build
+```
+
+在浏览器打开 `http://localhost:18002/health`，看到 `ok` 就是起来了。
+
+**4. 在 claude.ai 添加连接器**
+
+设置 → 连接器 → 添加自定义连接器 → URL 填 `https://river.你的域名/mcp` → 会跳出 River 的密码页 → 输 `.env` 里的密码。
+
+以后导入新的导出（`python3 -m river split ...`）不用重启容器，索引一更新就能搜到。
+更新代码后：`git pull && docker compose up -d --build`。
+
 ## 测试
 
 ```bash
