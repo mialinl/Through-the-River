@@ -154,7 +154,7 @@ input{{background:#2a2c2f;color:#e6e3dc;border-color:#44474b}}}}
         if refresh_token.token not in self.refresh:
             raise TokenError("invalid_grant", "refresh token 已经用过了")
         del self.refresh[refresh_token.token]
-        return self._issue(client.client_id, scopes or refresh_token.scopes, refresh_token.resource)
+        return self._issue(client.client_id, scopes or refresh_token.scopes, getattr(refresh_token, "resource", None))
 
     async def load_access_token(self, token: str) -> Optional[AccessToken]:
         a = self.access.get(token)

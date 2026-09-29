@@ -3,7 +3,10 @@
 #   docker compose up -d --build
 services:
   river:
-    build: .
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${RIVER_BASE_IMAGE:-python:3.12-slim}
     container_name: river
     restart: unless-stopped
     env_file: .env
