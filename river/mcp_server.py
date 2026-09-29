@@ -171,7 +171,8 @@ TOOLS = [river_windows, river_search, river_read, river_tail]
 
 
 def build_server(host: str, port: int, auth: bool) -> FastMCP:
-    kwargs = dict(instructions=INSTRUCTIONS, host=host, port=port)
+    # 无状态：不在内存里记会话，容器重启、隧道重连后第一次调用也不会因为旧会话失效而报错
+    kwargs = dict(instructions=INSTRUCTIONS, host=host, port=port, stateless_http=True)
     provider = None
     if auth:
         from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
