@@ -24,6 +24,9 @@ def main_line(messages: list[dict]) -> list[dict]:
     """从最新一条消息往回走到根，返回按时间正序的主线。"""
     if not messages:
         return []
+    if not any(m.get("parent_message_uuid") for m in messages):
+        # 旧格式导出没有父子关系，也就没有分支：按原来的顺序
+        return list(messages)
     by_id = {m["uuid"]: m for m in messages}
     leaf = max(messages, key=lambda m: m.get("created_at") or "")
     chain = []
@@ -82,8 +85,14 @@ def _block(b: dict) -> Optional[dict]:
 
 def _message(m: dict, i: int) -> dict:
     blocks = [nb for nb in (_block(b) for b in m.get("content") or []) if nb]
-    # 消息自带的 text 字段会把工具调用写成占位符，正文只从 text 块拼
-    text = "\n\n".join(b["text"] for b in blocks if b["type"] == "text" and b["text"])
+    # 消息自带的 text 字段会把工具调用写成占位符，正文只从 text 块拼；
+    # 旧格式导出没有 content 块，才退回用 text 字段
+    if blocks:
+        text = "\n\n".join(b["text"] for b in blocks if b["type"] == "text" and b["text"])
+    else:
+        text = m.get("text") or ""
+        if text:
+            blocks = [{"type": "text", "text": text}]
     out: dict[str, Any] = {
         "i": i,
         "uuid": m["uuid"],

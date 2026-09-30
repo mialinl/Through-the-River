@@ -56,6 +56,15 @@ class SplitTest(unittest.TestCase):
         self.assertEqual([b["type"] for b in b2["blocks"]], ["text", "tool_use", "tool_result", "text"])
         self.assertEqual(w["messages"][3]["flags"], ["self_harm_risk"])
 
+    def test_old_format_without_blocks_or_parents(self):
+        old = [
+            {"uuid": "o1", "sender": "human", "created_at": "2026-05-01T00:00:00Z", "text": "旧格式第一句"},
+            {"uuid": "o2", "sender": "assistant", "created_at": "2026-05-01T00:00:05Z", "text": "旧格式回复"},
+        ]
+        w = to_window({"uuid": "old", "name": "3", "created_at": "2026-05-01T00:00:00Z", "chat_messages": old})
+        self.assertEqual([m["text"] for m in w["messages"]], ["旧格式第一句", "旧格式回复"])
+        self.assertEqual(w["dropped_rerolls"], 0)
+
     def test_window_number(self):
         self.assertEqual(window_number("14.5with opus5"), "14.5")
         self.assertIsNone(window_number(""))
