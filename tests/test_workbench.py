@@ -131,6 +131,41 @@ class CliTest(unittest.TestCase):
             self.assertIn("还不认识", str(e.exception))
             self.assertEqual(len(store.window_files(store.Paths(Path(data)).windows)), 1)
 
+    def test_new_source_is_held_known_source_flows(self):
+        import contextlib, io
+        from river.cli import main
+        root = "00000000-0000-4000-8000-000000000000"
+
+        def export(path, account, items):
+            convs = []
+            for cid, name in items:
+                c = conv(cid, name, [msg(cid + "m", root, "human", "2026-05-01T00:00:00Z", [T("嗨 " + name)])])
+                c["account"] = {"uuid": account}
+                convs.append(c)
+            path.write_text(json.dumps(convs))
+
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            data = str(d / "data")
+            paths = store.Paths(Path(data))
+            pub = lambda: sorted(store.read_json(p)["name"] for p in store.window_files(paths.windows))
+            with contextlib.redirect_stdout(io.StringIO()):
+                export(d / "main1.json", "main", [("m-000012", "12")])
+                main(["--data", data, "import", str(d / "main1.json")])            # 河是空的：直接进
+                self.assertEqual(pub(), ["12"])
+                export(d / "main2.json", "main", [("m-000012", "12"), ("m-000016", "16")])
+                main(["--data", data, "import", str(d / "main2.json")])            # 认识的主号：16 直接进
+                self.assertEqual(pub(), ["12", "16"])
+                export(d / "old.json", "old", [("o-000001", "1"), ("o-000099", "测试")])
+                main(["--data", data, "import", str(d / "old.json")])              # 第一次见的旧号：先藏着
+                self.assertEqual(pub(), ["12", "16"])
+                main(["--data", data, "edit", "o-000001", "--show"])
+                main(["--data", data, "publish"])
+                self.assertEqual(pub(), ["1", "12", "16"])
+                export(d / "old2.json", "old", [("o-000001", "1"), ("o-000099", "测试"), ("o-000002", "2")])
+                main(["--data", data, "import", str(d / "old2.json")])             # 旧号现在认识了：2 直接进
+                self.assertEqual(pub(), ["1", "12", "16", "2"])
+
 
 if __name__ == "__main__":
     unittest.main()

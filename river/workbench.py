@@ -80,6 +80,16 @@ def edit(paths: store.Paths, ref: str, **changes) -> dict:
     return merged(w, e)
 
 
+def source_key(w: dict) -> tuple:
+    """同一个来源：同一个前端 + 同一个账号。"""
+    return (w.get("source"), w.get("account"))
+
+
+def published_sources(paths: store.Paths) -> set:
+    """河里已经有的来源。"""
+    return {source_key(store.read_json(p)) for p in store.window_files(paths.windows)}
+
+
 def listing(paths: store.Paths) -> list[dict]:
     """工作台里的每一窗（合上修改之后），带上是否已发布、发布版是否过期。"""
     edits = load_edits(paths)

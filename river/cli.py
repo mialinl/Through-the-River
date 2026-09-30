@@ -49,11 +49,17 @@ def cmd_split(args: argparse.Namespace) -> None:
     if not export.exists():
         sys.exit(f"找不到文件：{export}")
     paths = _paths(args)
+    known = workbench.published_sources(paths)
     r = split(export, paths.root, account_label=args.label, tz=args.tz)
-    if args.hide_new:
-        for status, _, w in r.rows:
-            if status == "new":
-                workbench.edit(paths, w["uuid"], hidden=True)
+    # 认识的来源（河里已经有它的窗）新窗直接进河；第一次见的来源先藏着等你挑。
+    # 河里还是空的（第一次用）就全部进河。
+    held = []
+    for status, _, w in r.rows:
+        if status != "new" or args.publish_new:
+            continue
+        if args.hide_new or (known and workbench.source_key(w) not in known):
+            workbench.edit(paths, w["uuid"], hidden=True)
+            held.append(w)
 
     print(f"认出来是：{ {'kelivo': 'Kelivo 备份', 'claude': 'claude.ai 导出'}.get(r.kind, r.kind) }")
     print(f"原文存档：{r.raw_path}{'' if r.raw_new else '（之前存过，没有重复存）'}")
@@ -66,9 +72,10 @@ def cmd_split(args: argparse.Namespace) -> None:
     counts = {s: sum(1 for row in r.rows if row[0] == s) for s in ("new", "updated", "unchanged")}
     print(f"\n新增 {counts['new']} 窗，更新 {counts['updated']} 窗，没变 {counts['unchanged']} 窗；"
           f"跳过空壳（删掉的窗口）{r.shells} 个。")
-    if args.hide_new and counts["new"]:
-        print(f"\n新增的 {counts['new']} 窗先藏着了。python3 -m river list 看看，"
-              "想要的用 python3 -m river edit 编号或uuid --show 放出来，再 publish。")
+    if held:
+        why = "（加了 --hide-new）" if args.hide_new else "（这个来源第一次进河，先让你挑）"
+        print(f"\n新增的 {len(held)} 窗先藏着了{why}。python3 -m river list 看看，"
+              "想要的用 python3 -m river edit uuid --show 放出来，再 publish。")
     if args.no_publish:
         print("\n这次只放到了工作台。整理好了跑 python3 -m river publish 发布。")
         return
@@ -159,7 +166,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--label", help="给这份导出的账号起个名字，比如 主号、旧号")
     s.add_argument("--tz", default=store.DEFAULT_TZ, help="文件名里的日期按哪个时区算")
     s.add_argument("--no-publish", action="store_true", help="只放到工作台，先不发布")
-    s.add_argument("--hide-new", action="store_true", help="这次新增的窗口先全部藏着，想要哪窗再放出来")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--hide-new", action="store_true", help="这次新增的窗口全部先藏着（平时不用加）")
+    g.add_argument("--publish-new", action="store_true",
+                   help="这次新增的窗口全部直接进河，哪怕来源是第一次见（平时不用加）")
     s.set_defaults(func=cmd_split)
 
     s = sub.add_parser("list", help="看工作台里有哪些窗口")
