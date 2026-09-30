@@ -15,6 +15,7 @@ data/
   river.db              从 windows/ 建的搜索索引，删了也能重建
 ```
 
+- `import` 接受 zip、解压的文件夹或 json，自己认格式
 - 每个窗口靠 uuid 认：没变的跳过，聊多了的换成新版本，改过名的不留两份
 - 导出里没有了的窗口（app 里删掉的）**不会**跟着删，河里照样留着
 - 删掉的窗口在导出里只剩空壳，直接跳过；重 roll 只保留主线
@@ -31,10 +32,11 @@ data/
 cd ~
 git clone -b claude/full-memory-conversation-json-0eslcs https://github.com/mialinl/Through-the-River.git
 cd Through-the-River
-python3 -m river split ~/Downloads/导出的文件.zip --label 主号
+python3 -m river import ~/Downloads/导出的文件.zip --label 主号
 ```
 
-导出的 zip 不用解压，直接给 zip 也行，给里面的 `conversations.json` 也行。
+导出的 zip 不用解压；解压出来的文件夹、里面的 `conversations.json` 也都能直接给。格式会自己认，认不出来的不会乱导。
+（`import` 以前叫 `split`，旧名字还能用。）
 `--label` 是给这个账号起的名字，旧号那份导出用 `--label 旧号`。
 
 **以后更新代码**
@@ -49,7 +51,7 @@ git pull
 想更新了，就去 claude.ai 导出一份新的，整个丢进来（不用删旧的、不用挑）：
 
 ```bash
-python3 -m river split 新导出.zip
+python3 -m river import 新导出.zip
 ```
 
 它会拆到工作台、自动发布、更新索引。
@@ -109,7 +111,7 @@ docker compose up -d --build
 
 设置 → 连接器 → 添加自定义连接器 → URL 填 `https://river.你的域名/mcp` → 会跳出 River 的密码页 → 输 `.env` 里的密码。
 
-以后导入新的导出（`python3 -m river split ...`）不用重启容器，索引一更新就能搜到。
+以后导入新的导出（`python3 -m river import ...`）不用重启容器，索引一更新就能搜到。
 更新代码后：`git pull && docker compose up -d --build`。
 
 ## 测试

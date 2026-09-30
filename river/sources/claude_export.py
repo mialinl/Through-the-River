@@ -12,6 +12,12 @@ ROOT_PARENT = "00000000-0000-4000-8000-000000000000"
 SOURCE = "claude.ai"
 
 
+def looks_like(obj) -> bool:
+    """claude.ai 导出：一个列表，每项是带 uuid 和 chat_messages 的对话。"""
+    return (isinstance(obj, list)
+            and all(isinstance(c, dict) and "uuid" in c and "chat_messages" in c for c in obj[:20]))
+
+
 def is_shell(conv: dict) -> bool:
     """删掉的窗口在导出里只剩空壳：消息还在，内容全空。"""
     for m in conv.get("chat_messages") or []:

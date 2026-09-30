@@ -18,7 +18,12 @@ from .sources import claude_export
 
 
 def read_export(path: Path) -> bytes:
-    """接受 conversations.json，或者官方导出的整个 zip。"""
+    """接受官方导出的整个 zip、解压出来的文件夹，或者里面的 conversations.json。"""
+    if path.is_dir():
+        found = sorted(path.rglob("conversations.json"))
+        if not found:
+            raise SystemExit(f"{path} 这个文件夹里没找到 conversations.json")
+        return found[0].read_bytes()
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as z:
             names = [n for n in z.namelist() if n.rsplit("/", 1)[-1] == "conversations.json"]
@@ -26,6 +31,17 @@ def read_export(path: Path) -> bytes:
                 raise SystemExit(f"{path} 里没有 conversations.json")
             return z.read(names[0])
     return path.read_bytes()
+
+
+def parse(data: bytes, path: Path) -> list:
+    """认格式：现在认得 claude.ai 官方导出，认不出来就停下，不乱导。"""
+    try:
+        obj = json.loads(data)
+    except ValueError:
+        raise SystemExit(f"{path.name} 不是 json 文件，看不懂。发给 CC 看看是什么格式。")
+    if claude_export.looks_like(obj):
+        return obj
+    raise SystemExit(f"{path.name} 的格式还不认识（不是 claude.ai 的导出）。发给 CC 看看结构，加一个对应的导入。")
 
 
 def archive_raw(data: bytes, raw_dir: Path) -> tuple[Path, bool]:
@@ -51,9 +67,7 @@ def split(export: Path, data_dir: Path, account_label: Optional[str] = None,
     paths = store.Paths(data_dir)
     report = SplitReport()
     data = read_export(export)
-    convs = json.loads(data)
-    if not isinstance(convs, list):
-        raise SystemExit("看不懂这个文件：conversations.json 应该是一个列表")
+    convs = parse(data, export)
 
     report.raw_path, report.raw_new = archive_raw(data, paths.raw)
     bench = paths.workbench

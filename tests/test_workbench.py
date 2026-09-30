@@ -105,6 +105,32 @@ class CliTest(unittest.TestCase):
             _, total = index.search(paths, "不相干")
             self.assertEqual(total, 0)
 
+    def test_import_accepts_zip_folder_json_and_refuses_unknown(self):
+        import contextlib, io, zipfile
+        from river.cli import main
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            root = "00000000-0000-4000-8000-000000000000"
+            convs = json.dumps([conv("z-000001", "1", [msg("z1", root, "human", "2026-05-01T00:00:00Z", [T("嗨")])])])
+            folder = d / "解压出来的"
+            (folder / "sub").mkdir(parents=True)
+            (folder / "sub" / "conversations.json").write_text(convs)
+            (folder / "users.json").write_text("[]")
+            with zipfile.ZipFile(d / "export.zip", "w") as z:
+                z.writestr("users.json", "[]")
+                z.writestr("conversations.json", convs)
+            weird = d / "weird.json"
+            weird.write_text(json.dumps({"messages": []}))
+            data = str(d / "data")
+            with contextlib.redirect_stdout(io.StringIO()):
+                for src in (d / "export.zip", folder, folder / "sub" / "conversations.json"):
+                    main(["--data", data, "import", str(src)])
+                main(["--data", data, "split", str(d / "export.zip")])  # 旧名字还能用
+                with self.assertRaises(SystemExit) as e:
+                    main(["--data", data, "import", str(weird)])
+            self.assertIn("还不认识", str(e.exception))
+            self.assertEqual(len(store.window_files(store.Paths(Path(data)).windows)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

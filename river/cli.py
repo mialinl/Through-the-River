@@ -78,7 +78,7 @@ def cmd_split(args: argparse.Namespace) -> None:
 def cmd_list(args: argparse.Namespace) -> None:
     rows = workbench.listing(_paths(args))
     if not rows:
-        print("工作台是空的。先跑 python3 -m river split 导出文件.zip")
+        print("工作台是空的。先跑 python3 -m river import 导出文件.zip")
         return
     state = {"yes": "已发布", "no": "未发布", "stale": "有改动未发布"}
     for m in rows:
@@ -153,8 +153,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--data", help="数据目录（默认是仓库里的 data/，也可以用环境变量 RIVER_DATA）")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("split", help="把 claude.ai 导出拆到工作台，然后发布")
-    s.add_argument("export", help="conversations.json，或者官方导出的 zip")
+    s = sub.add_parser("import", aliases=["split"], help="导入导出文件（zip、json 或解压的文件夹，自动认格式），拆到工作台再发布")
+    s.add_argument("export", help="导出的 zip、解压出来的文件夹，或者 conversations.json")
     s.add_argument("--label", help="给这份导出的账号起个名字，比如 主号、旧号")
     s.add_argument("--tz", default=store.DEFAULT_TZ, help="文件名里的日期按哪个时区算")
     s.add_argument("--no-publish", action="store_true", help="只放到工作台，先不发布")
