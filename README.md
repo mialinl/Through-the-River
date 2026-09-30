@@ -75,6 +75,9 @@ python3 -m river edit 8095ac3a --number 3      # 改编号（用 uuid 开头几�
 python3 -m river edit 12 --hide                # 藏起来，不发布（--show 取消）
 python3 -m river edit 3 5 7 --hide            # 一次藏好几窗（--show 一次放好几窗）
 python3 -m river publish                       # 把工作台上的修改发布出去
+python3 -m river drop --hidden                 # 藏着的窗全部丢掉（会先列出来让你确认）
+python3 -m river drop 1a632297                 # 丢掉某一窗；以后再导入也会跳过它
+python3 -m river drop 1a632297 --undo          # 反悔，下次导入它会回来（原件一直在 data/raw/）
 
 python3 -m river search 铁盒                    # 搜原文
 python3 -m river search 安迷修 字卡              # 几个词同时出现

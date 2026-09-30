@@ -166,6 +166,34 @@ class CliTest(unittest.TestCase):
                 main(["--data", data, "import", str(d / "old2.json")])             # 旧号现在认识了：2 直接进
                 self.assertEqual(pub(), ["1", "12", "16", "2"])
 
+    def test_drop_hidden_and_skip_on_reimport(self):
+        import contextlib, io
+        from river.cli import main
+        root = "00000000-0000-4000-8000-000000000000"
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            export = d / "e.json"
+            export.write_text(json.dumps([
+                conv("k-000007", "7", [msg("a", root, "human", "2026-06-18T00:00:00Z", [T("七窗")])]),
+                conv("k-00test", "test", [msg("b", root, "human", "2026-07-04T00:00:00Z", [T("测试窗")])]),
+            ]))
+            data = str(d / "data")
+            paths = store.Paths(Path(data))
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["--data", data, "import", str(export)])
+                main(["--data", data, "edit", "k-00test", "--hide"])
+                main(["--data", data, "drop", "--hidden", "--yes"])
+                self.assertEqual([w["name"] for w in workbench.listing(paths)], ["7"])
+                main(["--data", data, "import", str(export)])                  # 再导：丢掉的不回来
+                self.assertEqual([w["name"] for w in workbench.listing(paths)], ["7"])
+                main(["--data", data, "drop", "7", "--yes"])                    # 已发布的也能直接丢
+                self.assertEqual(store.window_files(paths.windows), [])
+                self.assertEqual(index.search(paths, "七窗")[1], 0)
+                main(["--data", data, "drop", "k-000007", "--undo"])            # 反悔
+                main(["--data", data, "import", str(export)])
+            self.assertEqual([w["name"] for w in workbench.listing(paths)], ["7"])
+            self.assertEqual(index.search(paths, "七窗")[1], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional
 
-from . import store
+from . import store, workbench
 from .sources import claude_export, kelivo
 
 SQLITE_MAGIC = b"SQLite format 3\x00"
@@ -95,6 +95,7 @@ class SplitReport:
     raw_new: bool = False
     rows: list = field(default_factory=list)  # (status, filename, window)
     shells: int = 0
+    dropped: int = 0
 
 
 def split(export: Path, data_dir: Path, account_label: Optional[str] = None,
@@ -110,9 +111,13 @@ def split(export: Path, data_dir: Path, account_label: Optional[str] = None,
     bench = paths.workbench
     bench.mkdir(parents=True, exist_ok=True)
 
+    gone = set(workbench.dropped(paths))
     for shell, w in windows:
         if shell:
             report.shells += 1
+            continue
+        if w["uuid"] in gone:
+            report.dropped += 1
             continue
         fname = store.window_filename(w, tz)
         existing = store.files_for_uuid(bench, w["uuid"])

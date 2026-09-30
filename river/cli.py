@@ -71,7 +71,7 @@ def cmd_split(args: argparse.Namespace) -> None:
             print(f"{label:<6}{(w['window'] or '-'):<6}{w['message_count']:>6}{w['dropped_rerolls']:>10}  {fname}")
     counts = {s: sum(1 for row in r.rows if row[0] == s) for s in ("new", "updated", "unchanged")}
     print(f"\n新增 {counts['new']} 窗，更新 {counts['updated']} 窗，没变 {counts['unchanged']} 窗；"
-          f"跳过空壳（删掉的窗口）{r.shells} 个。")
+          f"跳过空壳（删掉的窗口）{r.shells} 个" + (f"，跳过丢掉过的 {r.dropped} 个" if r.dropped else "") + "。")
     if held:
         why = "（加了 --hide-new）" if args.hide_new else "（这个来源第一次进河，先让你挑）"
         print(f"\n新增的 {len(held)} 窗先藏着了{why}。python3 -m river list 看看，"
@@ -111,6 +111,37 @@ def cmd_edit(args: argparse.Namespace) -> None:
         if m.get("note") and len(args.window) == 1:
             print(f"说明：{m['note']}")
     print("还在工作台上。确认好了跑 python3 -m river publish 发布。")
+
+
+def cmd_drop(args: argparse.Namespace) -> None:
+    paths = _paths(args)
+    if args.undo:
+        for ref in args.window:
+            name = workbench.undrop(paths, ref)
+            print(f"不丢了：{name}。下次导入含有它的导出时会回来。")
+        return
+    targets = workbench.hidden_windows(paths) if args.hidden else []
+    for ref in args.window:
+        w = workbench.resolve(paths, ref)
+        if w["uuid"] not in {t["uuid"] for t in targets}:
+            targets.append(w)
+    if not targets:
+        print("没有要丢的窗。")
+        return
+    print("要丢掉这些窗（从工作台和河里删掉，以后导入也跳过；原件还在 data/raw/ 里）：")
+    for w in targets:
+        print(f"  {w.get('window') or '-':<6}{w.get('name')}  （{w['message_count']} 条，uuid {w['uuid'][:8]}）")
+    if not args.yes:
+        try:
+            ok = input("确定吗？输入 y 回车：").strip().lower() == "y"
+        except EOFError:
+            ok = False
+        if not ok:
+            print("没丢。")
+            return
+    workbench.drop(paths, targets)
+    print(f"丢掉了 {len(targets)} 窗。反悔的话：python3 -m river drop uuid --undo")
+    _publish_and_index(paths)
 
 
 def cmd_publish(args: argparse.Namespace) -> None:
@@ -185,6 +216,13 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--hide", action="store_true", help="藏起来，不发布")
     g.add_argument("--show", action="store_true", help="取消隐藏")
     s.set_defaults(func=cmd_edit)
+
+    s = sub.add_parser("drop", help="丢掉窗口：从工作台和河里删掉，以后导入也跳过")
+    s.add_argument("window", nargs="*", help="窗口编号或 uuid 开头几位，可以写好几个")
+    s.add_argument("--hidden", action="store_true", help="所有藏着的窗一起丢掉")
+    s.add_argument("--undo", action="store_true", help="反悔：不丢了（下次导入会回来）")
+    s.add_argument("--yes", action="store_true", help="不用再确认")
+    s.set_defaults(func=cmd_drop)
 
     s = sub.add_parser("publish", help="把工作台发布到 windows/ 并更新索引")
     s.set_defaults(func=cmd_publish)

@@ -90,6 +90,37 @@ def published_sources(paths: store.Paths) -> set:
     return {source_key(store.read_json(p)) for p in store.window_files(paths.windows)}
 
 
+def dropped(paths: store.Paths) -> dict:
+    """丢掉的窗：{uuid: 当时的名字}。以后再导入会跳过它们。"""
+    return {u: e.get("dropped_name", "") for u, e in load_edits(paths).items() if e.get("dropped")}
+
+
+def hidden_windows(paths: store.Paths) -> list[dict]:
+    edits = load_edits(paths)
+    return [w for w in bench_windows(paths) if edits.get(w["uuid"], {}).get("hidden")]
+
+
+def drop(paths: store.Paths, windows: list[dict]) -> None:
+    """从工作台和河里删掉，并记住丢过（原件还在 data/raw/）。"""
+    edits = load_edits(paths)
+    for w in windows:
+        for folder in (paths.workbench, paths.windows):
+            for p in store.files_for_uuid(folder, w["uuid"]):
+                p.unlink()
+        edits[w["uuid"]] = {"dropped": True, "dropped_name": w.get("name", "")}
+    save_edits(paths, edits)
+
+
+def undrop(paths: store.Paths, ref: str) -> str:
+    edits = load_edits(paths)
+    hits = [u for u, e in edits.items() if e.get("dropped") and u.startswith(ref)]
+    if len(hits) != 1:
+        raise SystemExit(f"丢掉的窗里{'没有' if not hits else '有好几个对得上'}「{ref}」。")
+    name = edits.pop(hits[0]).get("dropped_name", "")
+    save_edits(paths, edits)
+    return name
+
+
 def listing(paths: store.Paths) -> list[dict]:
     """工作台里的每一窗（合上修改之后），带上是否已发布、发布版是否过期。"""
     edits = load_edits(paths)
