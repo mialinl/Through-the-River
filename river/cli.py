@@ -55,6 +55,7 @@ def cmd_split(args: argparse.Namespace) -> None:
             if status == "new":
                 workbench.edit(paths, w["uuid"], hidden=True)
 
+    print(f"认出来是：{ {'kelivo': 'Kelivo 备份', 'claude': 'claude.ai 导出'}.get(r.kind, r.kind) }")
     print(f"原文存档：{r.raw_path}{'' if r.raw_new else '（之前存过，没有重复存）'}")
     print(f"工作台：{paths.workbench}\n")
     if r.rows:
