@@ -14,8 +14,11 @@
 from __future__ import annotations
 
 import functools
+import json
 import os
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -26,10 +29,8 @@ from starlette.responses import PlainTextResponse
 
 from . import index, store
 
-INSTRUCTIONS = """River 是对话原文的全量库：每个窗口的原话，一个字没改过。
-Ombre 记的是挑过、压过的记忆；拿不准当时到底谁说了什么、怎么说的，来这里翻原文对质。
-开新窗时可以先 breath，再用 river_tail 读上一窗结尾，接上前情。
-搜索只搜正文；thinking 和工具返回不在里面。"""
+INSTRUCTIONS = """对话原文全量库，一字未改。Ombre 是挑过的记忆，这里是原话，拿不准谁说了什么时来对质。
+开新窗：先 breath，再 river_tail 接上一窗结尾。只搜正文，不含 thinking 和工具返回。"""
 
 
 def _tz() -> str:
@@ -65,7 +66,7 @@ def _render(rows, max_chars: int, focus: Optional[int] = None) -> str:
         mark = " ◀ 命中的这条" if focus is not None and r["i"] == focus else ""
         head = f"#{r['i']} {_time(r['created_at'])} {_who(r['sender'])}{_marks(r['tools'] or '', r['flags'] or '')}{mark}"
         room = max_chars - used
-        if room <= 200 and parts:
+        if len(text) > room and room <= 200 and parts:
             parts.append(f"……到字数上限了，从 #{r['i']} 往后没显示。调大 max_chars 或缩小范围再读。")
             break
         if len(text) > room:
@@ -79,22 +80,41 @@ def _paths() -> store.Paths:
     return store.Paths(Path(os.environ.get("RIVER_DATA", "data")).expanduser())
 
 
+def _log_call(tool: str, args: dict, chars: int, ms: int, error: str = "") -> None:
+    """每次工具调用记一行到 data/calls.log（重建容器不会丢），同时打到 docker logs。"""
+    rec = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tool": tool,
+           "args": args, "chars": chars, "ms": ms}
+    if error:
+        rec["error"] = error
+    line = json.dumps(rec, ensure_ascii=False)
+    print("river call " + line, file=sys.stderr, flush=True)
+    try:
+        with open(_paths().root / "calls.log", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
 def _safe(fn):
-    """索引层用 SystemExit 报「找不到」这类话，这里转成普通返回文本。"""
+    """索引层用 SystemExit 报「找不到」这类话，这里转成普通返回文本；顺便记账。"""
     @functools.wraps(fn)
     def wrapper(*a, **kw):
+        start, out, err = time.monotonic(), "", ""
         try:
-            return fn(*a, **kw)
+            out = fn(*a, **kw)
         except SystemExit as e:
-            return str(e)
+            out = str(e)
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"
+            raise
+        finally:
+            _log_call(fn.__name__, kw, len(out), int((time.monotonic() - start) * 1000), err)
+        return out
     return wrapper
 
 
 def river_windows() -> str:
-    """列出河里所有窗口：编号、名字、起止时间、条数，以及写给这一窗的说明。
-
-    想知道「那件事大概在哪一窗」时先看这个，再用 river_search 的 window 参数缩小范围。
-    """
+    """列出所有窗口：编号、名字、起止时间、条数、说明。"""
     rows = index.windows(_paths())
     if not rows:
         return "河里还没有窗口。"
@@ -108,18 +128,9 @@ def river_windows() -> str:
 
 
 def river_search(query: str, window: str = "", date_from: str = "", date_to: str = "",
-                 who: str = "", limit: int = 10, newest_first: bool = False) -> str:
-    """按关键词搜原文，返回命中的那句和它在哪一窗第几条。
-
-    query：关键词，几个词用空格隔开表示要同时出现。中文不用分词，直接写想找的那几个字。
-    window：只搜某一窗（窗口编号，比如 "15"、"14.5"，或 uuid 开头几位）。
-    date_from / date_to：日期范围，YYYY-MM-DD，两头都包含。
-    who："human" 只看人类说的，"assistant" 只看 Claude 说的；空着就都看。
-    limit：最多返回几条（默认 10，最多 50）。
-    newest_first：新的在前（默认按时间从早到晚）。
-
-    命中之后想看上下文，用 river_read(window=窗口编号, at=#后面的数字)。
-    """
+                 who: str = "", limit: int = 8, newest_first: bool = False) -> str:
+    """搜原文。query 空格隔开=同时出现；window 窗口编号；date_from/date_to 为 YYYY-MM-DD；
+    who 为 human 或 assistant。返回 [窗 #条号]，接着用 river_read(window, at=条号) 看上下文。"""
     sender = {"human": "human", "user": "human", "assistant": "assistant", "claude": "assistant"}.get(
         who.strip().lower()) if who else None
     hits, total = index.search(_paths(), query, window=window or None, date_from=date_from or None,
@@ -134,14 +145,8 @@ def river_search(query: str, window: str = "", date_from: str = "", date_to: str
     return "\n".join(lines) + f"\n\n一共 {total} 条命中{more}。"
 
 
-def river_read(window: str, at: int = -1, around: int = 5, max_chars: int = 8000) -> str:
-    """读一窗里的一段原文，逐字返回，不摘要。
-
-    window：窗口编号（"15"、"14.5"）或 uuid 开头几位。
-    at：从第几条读起，读它前后各 around 条（搜索结果里 # 后面的数字）；不填就从这一窗开头读。
-    around：前后各读几条（默认 5）。
-    max_chars：这次最多返回多少字（默认 8000），超了会停下并告诉你从哪条接着读。
-    """
+def river_read(window: str, at: int = -1, around: int = 3, max_chars: int = 3000) -> str:
+    """逐字读原文：第 at 条前后各 around 条（at 不填从开头读），最多 max_chars 字。"""
     p = _paths()
     if at is None or at < 0:
         w, rows = index.read(p, window, at=around, around=around)
@@ -152,19 +157,26 @@ def river_read(window: str, at: int = -1, around: int = 5, max_chars: int = 8000
         head += f"\n说明：{w['note']}"
     if not rows:
         return head + "\n这个范围里没有消息。"
-    return head + "\n\n" + _render(rows, max_chars, focus=at if at is not None and at >= 0 else None)
+    return head + "\n\n" + _render(rows, max(200, min(max_chars, 12000)), focus=at if at is not None and at >= 0 else None)
 
 
-def river_tail(window: str = "", chars: int = 3000) -> str:
-    """读一窗的结尾，从最后一条往前取，够 chars 个字就停（按字数截，不按轮数）。
-
-    不填 window 就读最后说过话的那一窗。开新窗时用它接上上一窗的前情。
-    """
-    w, rows = index.tail_chars(_paths(), window or None, chars=max(200, min(chars, 20000)))
+def river_tail(window: str = "", chars: int = 2000) -> str:
+    """读一窗结尾约 chars 字（不填 window = 最近那一窗），开新窗接前情用。"""
+    chars = max(200, min(chars, 8000))
+    w, rows = index.tail_chars(_paths(), window or None, chars=chars)
+    rows = [dict(r) for r in rows]
+    # 最早那条可能很长：只留它的后半截，保证最新的几条完整
+    newer = sum(len(r["text"] or "") for r in rows[1:])
+    if rows and newer + len(rows[0]["text"] or "") > chars:
+        keep = chars - newer
+        if keep <= 0 and len(rows) > 1:
+            rows = rows[1:]
+        else:
+            rows[0]["text"] = "……" + (rows[0]["text"] or "")[-max(keep, 1):]
     head = f"—— {w['window'] or '-'}窗「{w['name']}」的结尾 ——"
     if w["note"]:
         head += f"\n说明：{w['note']}"
-    return head + "\n\n" + _render(rows, max_chars=max(chars, 200) * 2)
+    return head + "\n\n" + _render(rows, max_chars=chars + 10)
 
 
 TOOLS = [river_windows, river_search, river_read, river_tail]
