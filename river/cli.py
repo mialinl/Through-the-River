@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from . import index, store, workbench
-from .split import split
+from .split import import_file
 
 WHO = {"human": "你", "assistant": "Claude"}
 WHO_ARG = {"你": "human", "me": "human", "human": "human", "claude": "assistant", "Claude": "assistant",
@@ -49,17 +49,8 @@ def cmd_split(args: argparse.Namespace) -> None:
     if not export.exists():
         sys.exit(f"找不到文件：{export}")
     paths = _paths(args)
-    known = workbench.published_sources(paths)
-    r = split(export, paths.root, account_label=args.label, tz=args.tz)
-    # 认识的来源（河里已经有它的窗）新窗直接进河；第一次见的来源先藏着等你挑。
-    # 河里还是空的（第一次用）就全部进河。
-    held = []
-    for status, _, w in r.rows:
-        if status != "new" or args.publish_new:
-            continue
-        if args.hide_new or (known and workbench.source_key(w) not in known):
-            workbench.edit(paths, w["uuid"], hidden=True)
-            held.append(w)
+    r, held = import_file(export, paths.root, account_label=args.label, hide_new=args.hide_new,
+                          publish_new=args.publish_new, tz=args.tz)
 
     print(f"认出来是：{ {'kelivo': 'Kelivo 备份', 'claude': 'claude.ai 导出'}.get(r.kind, r.kind) }")
     print(f"原文存档：{r.raw_path}{'' if r.raw_new else '（之前存过，没有重复存）'}")
@@ -187,6 +178,11 @@ def cmd_serve(args: argparse.Namespace) -> None:
     serve(stdio=args.stdio, host=args.host, port=args.port)
 
 
+def cmd_web(args: argparse.Namespace) -> None:
+    from .web import serve
+    serve(_paths(args), port=args.port, open_browser=not args.no_browser)
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="river", description="Through the River 全量记忆库")
     p.add_argument("--data", help="数据目录（默认是仓库里的 data/，也可以用环境变量 RIVER_DATA）")
@@ -243,6 +239,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--around", type=int, default=5, help="前后各读几条（默认 5）")
     s.add_argument("--tail", type=int, help="读最后几条")
     s.set_defaults(func=cmd_read)
+
+    s = sub.add_parser("web", help="打开本地网页：读原文、写便条、调编号、导入")
+    s.add_argument("--port", type=int, default=18003)
+    s.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    s.set_defaults(func=cmd_web)
 
     s = sub.add_parser("serve", help="启动 MCP 服务")
     s.add_argument("--stdio", action="store_true", help="用 stdio（本机 Claude Code / Desktop）")

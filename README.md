@@ -46,6 +46,21 @@ cd ~/Through-the-River
 git pull
 ```
 
+## 网页
+
+```bash
+python3 -m river web
+```
+
+浏览器会自己打开 `http://localhost:18003`，只在这台 Mac 上能访问。能做的事：
+
+- 左边一窗一张卡片，按编号排好；点开像聊天记录一样读，thinking 可以展开，调用的工具、safety flag 都标着
+- 卡片上直接改编号、名字、便条，藏起来、丢掉；改完点右上角「发布」
+- 搜原文，点结果直接跳到那一句
+- 把导出的 zip / json / Kelivo 备份拖进页面就导入
+
+关掉网页：在开着它的那个终端按 control + C。
+
 ## 日常用法
 
 想更新了，就去 claude.ai 导出一份新的，整个丢进来（不用删旧的、不用挑）：

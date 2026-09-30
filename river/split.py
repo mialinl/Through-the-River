@@ -141,3 +141,21 @@ def split(export: Path, data_dir: Path, account_label: Optional[str] = None,
         report.rows.append((status, fname, w))
 
     return report
+
+
+def import_file(export: Path, data_dir: Path, account_label: Optional[str] = None,
+                hide_new: bool = False, publish_new: bool = False,
+                tz: str = store.DEFAULT_TZ) -> tuple[SplitReport, list]:
+    """导入并决定新窗进不进河：认识的来源（河里已经有它的窗）直接进；第一次见的来源先藏着等你挑；
+    河里还是空的（第一次用）就全部进。返回 (报告, 被先藏起来的窗)。不发布，发布由调用方做。"""
+    paths = store.Paths(data_dir)
+    known = workbench.published_sources(paths)
+    r = split(export, data_dir, account_label=account_label, tz=tz)
+    held = []
+    for status, _, w in r.rows:
+        if status != "new" or publish_new:
+            continue
+        if hide_new or (known and workbench.source_key(w) not in known):
+            workbench.edit(paths, w["uuid"], hidden=True)
+            held.append(w)
+    return r, held

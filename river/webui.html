@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Through the River</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%8A%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f0e8; --panel: #fbf9f4; --ink: #2b2a27; --muted: #7a756b; --faint: #b9b3a6;
+  --line: #e2ddd1; --accent: #3d6b78; --accent-soft: #dce8ea; --warn: #b35a3a;
+  --me: #3d6b78; --me-ink: #fff; --claude: #fff; --claude-ink: #2b2a27; --mark: #f3dd8a;
+  --shadow: 0 1px 2px rgba(60, 50, 30, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1d1f; --panel: #232629; --ink: #e8e5de; --muted: #a09b91; --faint: #676359;
+    --line: #34383c; --accent: #7fb2bf; --accent-soft: #2b3a3e; --warn: #e08a68;
+    --me: #3f6f7c; --me-ink: #f4f7f8; --claude: #2c3034; --claude-ink: #e8e5de; --mark: #6b5a1c;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 14px/1.6 -apple-system, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  display: grid; grid-template-rows: auto 1fr; overflow: hidden;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+  padding: 5px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--faint); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:disabled { opacity: .45; cursor: default; }
+button.danger { color: var(--warn); }
+button.link { border: none; background: none; padding: 0; color: var(--accent); }
+input, textarea {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+}
+input:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+header {
+  display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+header h1 { font-size: 16px; font-weight: 600; margin: 0 8px 0 0; letter-spacing: .02em; white-space: nowrap; }
+header h1 span { color: var(--muted); font-weight: 400; }
+#q { flex: 1; max-width: 420px; }
+#status { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+
+main { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+aside { border-right: 1px solid var(--line); overflow-y: auto; padding: 10px; }
+.group-title { color: var(--muted); font-size: 12px; margin: 14px 6px 6px; display: flex; justify-content: space-between; }
+.card {
+  display: grid; grid-template-columns: 42px 1fr; gap: 2px 10px; padding: 9px 10px;
+  border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+}
+.card:hover { background: var(--panel); }
+.card.active { background: var(--panel); border-color: var(--line); box-shadow: var(--shadow); }
+.num {
+  grid-row: span 3; align-self: start; text-align: center; font-weight: 600; font-size: 15px;
+  color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 4px 0;
+}
+.num.none { color: var(--faint); background: transparent; border: 1px dashed var(--line); }
+.card .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .meta { color: var(--muted); font-size: 12px; }
+.card .note { color: var(--ink); opacity: .75; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 6px; vertical-align: middle; }
+.dot.unpublished, .dot.changed { background: var(--warn); }
+.card.hidden { opacity: .55; }
+
+section#view { overflow-y: auto; min-width: 0; }
+.empty { color: var(--muted); text-align: center; margin-top: 18vh; line-height: 2; }
+.empty .big { font-size: 22px; color: var(--ink); }
+
+.win-head {
+  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  padding: 14px 28px 12px; border-bottom: 1px solid var(--line);
+}
+.win-head .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.win-head .f-num { width: 64px; text-align: center; }
+.win-head .f-name { flex: 1; min-width: 180px; font-weight: 600; }
+.win-head textarea { width: 100%; margin-top: 8px; min-height: 38px; resize: vertical; }
+.win-head .sub { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.saved { color: var(--accent); font-size: 12px; opacity: 0; transition: opacity .3s; }
+.saved.on { opacity: 1; }
+
+.msgs { padding: 16px 28px 60px; max-width: 900px; }
+.more { text-align: center; margin: 8px 0 16px; }
+.msg { display: flex; flex-direction: column; margin: 14px 0; }
+.msg.human { align-items: flex-end; }
+.msg .head { font-size: 12px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; align-items: center; }
+.bubble {
+  max-width: min(680px, 88%); padding: 9px 13px; border-radius: 14px; white-space: pre-wrap;
+  word-break: break-word; box-shadow: var(--shadow);
+}
+.msg.human .bubble { background: var(--me); color: var(--me-ink); border-bottom-right-radius: 4px; }
+.msg.assistant .bubble { background: var(--claude); color: var(--claude-ink); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.focus .bubble { outline: 3px solid var(--mark); outline-offset: 2px; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.chip.flag { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+details.think { max-width: min(680px, 88%); margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+details.think summary { cursor: pointer; }
+details.think div { white-space: pre-wrap; border-left: 2px solid var(--line); padding-left: 10px; margin-top: 4px; }
+
+.results { padding: 16px 28px 60px; max-width: 900px; }
+.results h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+.hit { padding: 10px 12px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+.hit:hover { background: var(--panel); border-color: var(--line); }
+.hit .meta { color: var(--muted); font-size: 12px; }
+mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+#drop {
+  position: fixed; inset: 0; background: rgba(40, 60, 70, .35); display: none;
+  align-items: center; justify-content: center; z-index: 10;
+}
+#drop.on { display: flex; }
+#drop div { background: var(--panel); padding: 28px 40px; border-radius: 16px; border: 2px dashed var(--accent); font-size: 16px; }
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  padding: 9px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .3s; pointer-events: none;
+  max-width: 80vw; white-space: pre-wrap; z-index: 20;
+}
+#toast.on { opacity: .95; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Through the River <span>· 工作台</span></h1>
+  <input id="q" type="search" placeholder="搜原文，几个词用空格隔开">
+  <button id="btn-import" title="也可以直接把文件拖进页面">导入</button>
+  <input id="file" type="file" accept=".zip,.json,.db" hidden>
+  <button id="btn-publish" class="primary" disabled>发布</button>
+  <span id="status"></span>
+</header>
+<main>
+  <aside id="list"></aside>
+  <section id="view">
+    <div class="empty"><div class="big">🌊</div>从左边选一窗开始读<br>或者在上面搜一句话</div>
+  </section>
+</main>
+<div id="drop"><div>松手就导入 🌊</div></div>
+<div id="toast"></div>
+
+<script>
+const TOKEN = "__RIVER_TOKEN__";
+const HUMAN = "__RIVER_HUMAN__";
+const PAGE = 60;
+let windows = [];
+let current = null;          // {uuid, total, start, end}
+let showHidden = false;
+
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
+
+function toast(msg, ms = 2600) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("on"), ms);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `出错了（${res.status}）`);
+  return data;
+}
+const post = (path, body) => api(path, {
+  method: "POST", headers: {"Content-Type": "application/json", "X-River-Token": TOKEN},
+  body: JSON.stringify(body || {}),
+});
+
+/* —— 左边的窗口列表 —— */
+async function loadWindows() {
+  windows = await api("/api/windows");
+  renderList();
+  const pending = windows.filter(w => w.state === "unpublished" || w.state === "changed").length;
+  const btn = $("#btn-publish");
+  btn.disabled = pending === 0;
+  btn.textContent = pending ? `发布 ${pending} 处改动` : "已全部发布";
+  const live = windows.filter(w => w.state !== "hidden");
+  const total = live.reduce((s, w) => s + (w.message_count || 0), 0);
+  $("#status").textContent = `${live.length} 窗 · ${total.toLocaleString()} 条`;
+}
+
+function card(w) {
+  const c = el("div", "card" + (w.state === "hidden" ? " hidden" : "") + (current && current.uuid === w.uuid ? " active" : ""));
+  c.append(el("div", "num" + (w.window ? "" : " none"), w.window || "·"));
+  const name = el("div", "name", w.name || "（没有名字）");
+  if (w.state === "unpublished" || w.state === "changed") {
+    const d = el("span", "dot " + w.state);
+    d.title = w.state === "changed" ? "有改动还没发布" : "还没发布";
+    name.append(d);
+  }
+  c.append(name);
+  c.append(el("div", "meta", `${w.first_at.slice(5, 10)} → ${w.last_at.slice(5, 10)} · ${w.message_count} 条`));
+  if (w.note) c.append(el("div", "note", w.note));
+  c.onclick = () => openWindow(w.uuid);
+  return c;
+}
+
+function renderList() {
+  const list = $("#list");
+  list.replaceChildren();
+  const main = windows.filter(w => w.state !== "hidden" && w.window);
+  const extra = windows.filter(w => w.state !== "hidden" && !w.window);
+  const hidden = windows.filter(w => w.state === "hidden");
+  main.forEach(w => list.append(card(w)));
+  if (extra.length) {
+    list.append(el("div", "group-title", "番外"));
+    extra.forEach(w => list.append(card(w)));
+  }
+  if (hidden.length) {
+    const t = el("div", "group-title");
+    t.append(el("span", "", `藏着的 ${hidden.length} 窗（不在河里）`));
+    const b = el("button", "link", showHidden ? "收起" : "展开");
+    b.onclick = () => { showHidden = !showHidden; renderList(); };
+    t.append(b);
+    list.append(t);
+    if (showHidden) {
+      hidden.forEach(w => list.append(card(w)));
+      const dropAll = el("button", "danger", "把藏着的全部丢掉");
+      dropAll.style.margin = "8px 6px";
+      dropAll.onclick = () => dropWindows(hidden);
+      list.append(dropAll);
+    }
+  }
+}
+
+/* —— 右边：读一窗 —— */
+async function openWindow(uuid, focusI) {
+  const w = windows.find(x => x.uuid === uuid);
+  if (!w) return;
+  const start = focusI === undefined ? 0 : Math.max(0, focusI - 20);
+  current = {uuid, total: w.message_count, start, end: start};
+  renderList();
+  const view = $("#view");
+  view.replaceChildren(windowHead(w));
+  const msgs = el("div", "msgs");
+  msgs.id = "msgs";
+  view.append(msgs);
+  view.scrollTop = 0;
+  await loadMore("down", focusI);
+  if (focusI !== undefined) {
+    const target = document.getElementById("m" + focusI);
+    if (target) target.scrollIntoView({block: "center"});
+  }
+}
+
+function windowHead(w) {
+  const head = el("div", "win-head");
+  const row = el("div", "row");
+  const num = el("input", "f-num"); num.value = w.window || ""; num.placeholder = "编号";
+  const name = el("input", "f-name"); name.value = w.name || ""; name.placeholder = "名字";
+  const saved = el("span", "saved", "已保存");
+  const hideBtn = el("button", "", w.state === "hidden" ? "放回河里" : "藏起来");
+  const dropBtn = el("button", "danger", "丢掉");
+  row.append(num, name, saved, hideBtn, dropBtn);
+  const note = el("textarea");
+  note.placeholder = "便条：这一窗的前提说明、模型、发生了什么……";
+  note.value = w.note || "";
+  const sub = el("div", "sub");
+  const src = w.source === "kelivo" ? "Kelivo" : "claude.ai";
+  sub.append(el("span", "", `${w.first_at} → ${w.last_at}`), el("span", "", `${w.message_count} 条`),
+             el("span", "", `来源：${src}${w.account_label ? " · " + w.account_label : ""}`));
+  if (w.original_name && w.original_name !== w.name) sub.append(el("span", "", `原名：${w.original_name}`));
+  const jump = el("input"); jump.placeholder = "跳到第几条"; jump.style.width = "100px";
+  jump.onkeydown = (e) => { if (e.key === "Enter" && jump.value !== "") openWindow(w.uuid, Number(jump.value)); };
+  sub.append(jump);
+  head.append(row, note, sub);
+
+  const save = async (field, value) => {
+    if ((w[field] || "") === value) return;
+    try {
+      await post("/api/edit", {uuid: w.uuid, [field]: value});
+      w[field] = value;
+      saved.classList.add("on"); setTimeout(() => saved.classList.remove("on"), 1200);
+      await loadWindows();
+    } catch (e) { toast(e.message); }
+  };
+  num.onchange = () => save("window", num.value.trim());
+  name.onchange = () => save("name", name.value.trim());
+  note.onchange = () => save("note", note.value.trim());
+  hideBtn.onclick = async () => {
+    try {
+      await post("/api/edit", {uuid: w.uuid, hidden: w.state !== "hidden"});
+      await loadWindows();
+      openWindow(w.uuid);
+      toast(w.state === "hidden" ? "放回来了，点「发布」生效" : "藏起来了，点「发布」生效");
+    } catch (e) { toast(e.message); }
+  };
+  dropBtn.onclick = () => dropWindows([w]);
+  return head;
+}
+
+function renderMsg(m) {
+  const box = el("div", "msg " + m.who);
+  box.id = "m" + m.i;
+  const head = el("div", "head");
+  head.append(el("span", "", `#${m.i}`), el("span", "", m.who === "human" ? HUMAN : "Claude"), el("span", "", m.time));
+  if (m.model) head.append(el("span", "chip", m.model));
+  m.tools.forEach(t => head.append(el("span", "chip", "调用 " + t)));
+  m.flags.forEach(f => head.append(el("span", "chip flag", "⚑ " + f)));
+  box.append(head);
+  if (m.thinking.length) {
+    const d = el("details", "think");
+    d.append(el("summary", "", "thinking"));
+    d.append(el("div", "", m.thinking.join("\n\n")));
+    box.append(d);
+  }
+  let text = m.text || (m.tools.length ? "（这条只调用了工具）" : "（没有正文）");
+  if (m.files.length) text += (m.text ? "\n\n" : "") + "📎 " + m.files.join("、");
+  box.append(el("div", "bubble", text));
+  return box;
+}
+
+async function loadMore(dir, focusI) {
+  if (!current) return;
+  const msgs = $("#msgs");
+  const uuid = current.uuid;
+  let offset, limit;
+  if (dir === "down") { offset = current.end; limit = PAGE; }
+  else { offset = Math.max(0, current.start - PAGE); limit = current.start - offset; }
+  if (limit <= 0) return;
+  const data = await api(`/api/messages?uuid=${encodeURIComponent(uuid)}&offset=${offset}&limit=${limit}`);
+  if (!current || current.uuid !== uuid) return;
+  msgs.querySelectorAll(".more").forEach(n => n.remove());
+  const nodes = data.messages.map(renderMsg);
+  if (focusI !== undefined) nodes.forEach(n => { if (n.id === "m" + focusI) n.classList.add("focus"); });
+  if (dir === "down") { msgs.append(...nodes); current.end = offset + data.messages.length; }
+  else {
+    const view = $("#view"), before = view.scrollHeight;
+    msgs.prepend(...nodes); current.start = offset;
+    view.scrollTop += view.scrollHeight - before;
+  }
+  if (current.start > 0) {
+    const b = el("div", "more"); const btn = el("button", "", `往前读（前面还有 ${current.start} 条）`);
+    btn.onclick = () => loadMore("up"); b.append(btn); msgs.prepend(b);
+  }
+  if (current.end < data.total) {
+    const b = el("div", "more"); const btn = el("button", "", `接着读（后面还有 ${data.total - current.end} 条）`);
+    btn.onclick = () => loadMore("down"); b.append(btn); msgs.append(b);
+  }
+}
+
+/* —— 搜索 —— */
+function highlight(snippet) {
+  const frag = document.createDocumentFragment();
+  snippet.split(/(【[^】]*】)/).forEach(part => {
+    if (part.startsWith("【") && part.endsWith("】")) frag.append(el("mark", "", part.slice(1, -1)));
+    else if (part) frag.append(document.createTextNode(part));
+  });
+  return frag;
+}
+
+async function search(q) {
+  current = null; renderList();
+  const view = $("#view");
+  const box = el("div", "results");
+  view.replaceChildren(box);
+  box.append(el("h2", "", `搜「${q}」…`));
+  try {
+    const data = await api(`/api/search?q=${encodeURIComponent(q)}&limit=100`);
+    box.replaceChildren(el("h2", "", data.total ? `「${q}」一共 ${data.total} 条${data.total > data.hits.length ? `，这里显示前 ${data.hits.length} 条` : ""}` : `没搜到「${q}」`));
+    data.hits.forEach(h => {
+      const hit = el("div", "hit");
+      hit.append(el("div", "meta", `${h.window ? h.window + " 窗" : h.name} · #${h.i} · ${h.time} · ${h.who === "human" ? HUMAN : "Claude"}`));
+      const s = el("div"); s.append(highlight(h.snippet)); hit.append(s);
+      hit.onclick = () => openWindow(h.uuid, h.i);
+      box.append(hit);
+    });
+    if (data.total) box.append(el("p", "meta", "只搜发布了的窗；藏着的搜不到。"));
+  } catch (e) { box.replaceChildren(el("h2", "", e.message)); }
+}
+$("#q").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.value.trim()) search(e.target.value.trim()); });
+
+/* —— 发布、丢掉、导入 —— */
+$("#btn-publish").onclick = async () => {
+  const btn = $("#btn-publish"); btn.disabled = true; btn.textContent = "发布中…";
+  try {
+    const r = await post("/api/publish");
+    toast(`发布好了：河里 ${r.windows} 窗，${r.messages.toLocaleString()} 条`);
+  } catch (e) { toast(e.message); }
+  await loadWindows();
+};
+
+async function dropWindows(ws) {
+  const names = ws.map(w => `${w.window ? w.window + " · " : ""}${w.name}（${w.message_count} 条）`).join("\n");
+  if (!confirm(`丢掉这 ${ws.length} 窗？\n\n${names}\n\n会从工作台和河里删掉，以后导入也会跳过。\n原件还留在 data/raw/ 里。`)) return;
+  try {
+    const r = await post("/api/drop", {uuids: ws.map(w => w.uuid)});
+    toast(`丢掉了 ${r.dropped} 窗`);
+    if (current && ws.some(w => w.uuid === current.uuid)) {
+      current = null;
+      $("#view").replaceChildren(el("div", "empty", "丢掉了。"));
+    }
+  } catch (e) { toast(e.message); }
+  await loadWindows();
+}
+
+async function importFile(file) {
+  const label = prompt(`导入「${file.name}」\n\n给这份导出的账号起个名字（比如 主号、旧号，可以空着）：`, "");
+  if (label === null) return;
+  toast(`正在导入「${file.name}」…`, 60000);
+  try {
+    const r = await api("/api/import", {
+      method: "POST", body: file,
+      headers: {"X-River-Token": TOKEN, "X-Filename": encodeURIComponent(file.name), "X-Label": encodeURIComponent(label.trim())},
+    });
+    const kind = r.kind === "kelivo" ? "Kelivo 备份" : "claude.ai 导出";
+    let msg = `${kind}：新增 ${r.new} 窗，更新 ${r.updated} 窗，没变 ${r.unchanged} 窗`;
+    if (r.held.length) msg += `\n这个来源第一次进河，新的 ${r.held.length} 窗先藏着了，在左下角「藏着的」里挑。`;
+    toast(msg, 7000);
+  } catch (e) { toast(e.message, 6000); }
+  await loadWindows();
+}
+$("#btn-import").onclick = () => $("#file").click();
+$("#file").onchange = (e) => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ""; };
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if (e.dataTransfer.types.includes("Files")) { dragDepth++; $("#drop").classList.add("on"); } });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("#drop").classList.remove("on"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; $("#drop").classList.remove("on");
+  const f = e.dataTransfer.files[0];
+  if (f) importFile(f);
+});
+
+loadWindows().catch(e => toast(e.message, 6000));
+</script>
+</body>
+</html>
