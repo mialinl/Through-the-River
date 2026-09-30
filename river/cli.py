@@ -50,6 +50,10 @@ def cmd_split(args: argparse.Namespace) -> None:
         sys.exit(f"找不到文件：{export}")
     paths = _paths(args)
     r = split(export, paths.root, account_label=args.label, tz=args.tz)
+    if args.hide_new:
+        for status, _, w in r.rows:
+            if status == "new":
+                workbench.edit(paths, w["uuid"], hidden=True)
 
     print(f"原文存档：{r.raw_path}{'' if r.raw_new else '（之前存过，没有重复存）'}")
     print(f"工作台：{paths.workbench}\n")
@@ -61,6 +65,9 @@ def cmd_split(args: argparse.Namespace) -> None:
     counts = {s: sum(1 for row in r.rows if row[0] == s) for s in ("new", "updated", "unchanged")}
     print(f"\n新增 {counts['new']} 窗，更新 {counts['updated']} 窗，没变 {counts['unchanged']} 窗；"
           f"跳过空壳（删掉的窗口）{r.shells} 个。")
+    if args.hide_new and counts["new"]:
+        print(f"\n新增的 {counts['new']} 窗先藏着了。python3 -m river list 看看，"
+              "想要的用 python3 -m river edit 编号或uuid --show 放出来，再 publish。")
     if args.no_publish:
         print("\n这次只放到了工作台。整理好了跑 python3 -m river publish 发布。")
         return
@@ -85,12 +92,16 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 def cmd_edit(args: argparse.Namespace) -> None:
     paths = _paths(args)
+    if len(args.window) > 1 and (args.number or args.name or args.note is not None):
+        sys.exit("编号、名字、说明一次只能改一窗；一次改好几窗只能用 --hide / --show / --label。")
     hidden = True if args.hide else (False if args.show else None)
-    m = workbench.edit(paths, args.window, window=args.number, name=args.name, note=args.note,
-                       hidden=hidden, account_label=args.label)
-    print(f"改好了：{m.get('window') or '-'}  {m.get('name')}")
-    if m.get("note"):
-        print(f"说明：{m['note']}")
+    for ref in args.window:
+        m = workbench.edit(paths, ref, window=args.number, name=args.name, note=args.note,
+                           hidden=hidden, account_label=args.label)
+        state = "（藏着）" if hidden else ""
+        print(f"改好了：{m.get('window') or '-'}  {m.get('name')}{state}")
+        if m.get("note") and len(args.window) == 1:
+            print(f"说明：{m['note']}")
     print("还在工作台上。确认好了跑 python3 -m river publish 发布。")
 
 
@@ -147,13 +158,14 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--label", help="给这份导出的账号起个名字，比如 主号、旧号")
     s.add_argument("--tz", default=store.DEFAULT_TZ, help="文件名里的日期按哪个时区算")
     s.add_argument("--no-publish", action="store_true", help="只放到工作台，先不发布")
+    s.add_argument("--hide-new", action="store_true", help="这次新增的窗口先全部藏着，想要哪窗再放出来")
     s.set_defaults(func=cmd_split)
 
     s = sub.add_parser("list", help="看工作台里有哪些窗口")
     s.set_defaults(func=cmd_list)
 
     s = sub.add_parser("edit", help="改一窗的编号、名字、说明，或者藏起来")
-    s.add_argument("window", help="窗口编号（15、14.5）或 uuid 开头几位")
+    s.add_argument("window", nargs="+", help="窗口编号（15、14.5）或 uuid 开头几位，藏/放可以一次写好几个")
     s.add_argument("--number", help="改窗口编号")
     s.add_argument("--name", help="改显示名字")
     s.add_argument("--note", help="写这一窗的说明（传空字符串 \"\" 就是删掉）")

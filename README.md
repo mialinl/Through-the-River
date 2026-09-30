@@ -52,7 +52,13 @@ git pull
 python3 -m river split 新导出.zip
 ```
 
-它会拆到工作台、自动发布、更新索引。其他命令：
+它会拆到工作台、自动发布、更新索引。
+
+导出里混着不想放进河里的窗口（比如旧号里别的对话）：加 `--hide-new`，这次新进来的窗先全部藏着，
+`list` 看一眼，想要的用 `edit 编号或uuid --show` 放出来，再 `publish`。藏着的窗不会发布、搜不到，
+以后再导同一份也还是藏着。
+
+其他命令：
 
 ```bash
 python3 -m river list                          # 工作台里有哪些窗口
@@ -60,6 +66,7 @@ python3 -m river edit 15 --note "o55 第一窗"    # 写这一窗的说明
 python3 -m river edit 14.5 --name "opus5 第一夜" # 改显示名字
 python3 -m river edit 8095ac3a --number 3      # 改编号（用 uuid 开头几位指定窗口也行）
 python3 -m river edit 12 --hide                # 藏起来，不发布（--show 取消）
+python3 -m river edit 3 5 7 --hide            # 一次藏好几窗（--show 一次放好几窗）
 python3 -m river publish                       # 把工作台上的修改发布出去
 
 python3 -m river search 铁盒                    # 搜原文

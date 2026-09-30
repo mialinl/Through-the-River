@@ -77,5 +77,34 @@ class WorkbenchTest(unittest.TestCase):
             self.assertEqual([r["tools"] for r in index.read(paths, "15", at=1, around=0)[1]], ["breath"])
 
 
+class CliTest(unittest.TestCase):
+    def test_hide_new_then_show_some(self):
+        import contextlib, io
+        from river.cli import main
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            export = d / "old.json"
+            root = "00000000-0000-4000-8000-000000000000"
+            export.write_text(json.dumps([
+                conv("old-0001", "1", [msg("o1", root, "human", "2026-05-01T00:00:00Z", [T("第一窗")])]),
+                conv("old-0002", "工作的事", [msg("o2", root, "human", "2026-05-02T00:00:00Z", [T("不相干")])]),
+                conv("old-0003", "2", [msg("o3", root, "human", "2026-05-03T00:00:00Z", [T("第二窗")])]),
+            ]))
+            data = str(d / "data")
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["--data", data, "split", str(export), "--label", "旧号", "--hide-new"])
+                paths = store.Paths(Path(data))
+                self.assertEqual(store.window_files(paths.windows), [])      # 全藏着，什么都没发布
+                main(["--data", data, "edit", "1", "old-0003", "--show"])      # 一次放出两窗
+                main(["--data", data, "publish"])
+                # 同一份再导一次：藏着的还藏着，放出来的还在
+                main(["--data", data, "split", str(export), "--hide-new"])
+            names = sorted(store.read_json(p)["name"] for p in store.window_files(paths.windows))
+            self.assertEqual(names, ["1", "2"])
+            self.assertEqual({store.read_json(p)["account_label"] for p in store.window_files(paths.windows)}, {"旧号"})
+            _, total = index.search(paths, "不相干")
+            self.assertEqual(total, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
